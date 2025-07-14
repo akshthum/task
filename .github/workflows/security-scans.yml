@@ -1,12 +1,14 @@
-name: Security Scanning Workflow
+name: EC2 CI/CD with SonarQube, Snyk, and OWASP ZAP
+
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
 
 jobs:
-  sonar-scan:
-    name: SonarQube Analysis
+  sonarqube_scan:
+    name: SonarQube Scan
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,33 +19,31 @@ jobs:
         with:
           java-version: 21
           distribution: 'zulu'
-      - name: SonarQube Analysis
+      - name: Build and analyze
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        run: mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.organization=copilotorg -Dsonar.projectKey=copilotproj
+        run: mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.organization=akshayaorg -Dsonar.projectKey=akshayaorg_proj
 
-  snyk-scan:
-    needs: sonar-scan
-    if: always()
-    name: Snyk Security Scan
+  snyk_scan:
+    name: Snyk Scan
     runs-on: ubuntu-latest
+    needs: sonarqube_scan
+    if: always()
     steps:
       - uses: actions/checkout@v4
-      - name: Snyk Security Scan
+      - name: Run Snyk to check for vulnerabilities
         uses: snyk/actions/maven@master
-        continue-on-error: true
+        continue-on-error: false
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
-  zap-scan:
-    needs: snyk-scan
-    if: always()
+  owasp_zap_scan:
     name: OWASP ZAP Scan
     runs-on: ubuntu-latest
+    needs: snyk_scan
+    if: always()
     steps:
       - uses: actions/checkout@v4
-      - name: OWASP ZAP Scan
+      - name: ZAP Scan
         uses: zaproxy/action-baseline@v0.14.0
-        with:
-          target: 'https://www.zaproxy.org'
